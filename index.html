@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lucky Wheel Pro - Fixed Match</title>
+    <style>
+        :root { --primary: #6c5ce7; --bg: #f3f4f6; --danger: #ff4757; }
+        body { font-family: 'Kanit', sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .header-bar { width: 100%; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); box-sizing: border-box; position: sticky; top: 0; z-index: 100; }
+        .btn-auth { background: var(--primary); color: white; border: none; padding: 6px 15px; border-radius: 20px; font-size: 13px; cursor: pointer; }
+        .user-info { font-size: 14px; color: var(--primary); font-weight: bold; cursor: pointer; border-bottom: 2px dashed var(--primary); }
+        .wheel-wrapper { position: relative; margin-top: 40px; width: 320px; height: 320px; }
+        #wheel-canvas { width: 100%; height: 100%; border-radius: 50%; border: 8px solid white; box-shadow: 0 10px 25px rgba(0,0,0,0.1); transform: rotate(0deg); }
+        .pointer { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 35px solid #ff4757; z-index: 10; }
+        .btn-spin { margin-top: 40px; padding: 15px 70px; font-size: 24px; font-weight: bold; color: white; background: var(--primary); border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 6px 0 #4834d4; transition: transform 0.1s; }
+        .btn-spin:active { transform: translateY(4px); box-shadow: none; }
+        #admin-trigger { position: absolute; top: 0; right: 0; width: 60px; height: 60px; opacity: 0; cursor: pointer; z-index: 1000; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 25px; border-radius: 20px; width: 85%; max-width: 400px; text-align: center; }
+        input { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 16px; margin-bottom: 10px; }
+        .m-btn { width: 100%; padding: 12px; border: none; border-radius: 10px; margin-top: 10px; cursor: pointer; font-weight: bold; font-size: 16px; }
+        .btn-main { background: var(--primary); color: white; }
+        .profile-data-box { background: #f0edff; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: left; border: 1px solid var(--primary); }
+        .history-list { width: 90%; max-width: 350px; margin-top: 30px; padding-bottom: 50px; }
+        .history-item { background: white; padding: 12px; border-radius: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .history-date { font-size: 11px; color: #888; text-align: right; line-height: 1.2; }
+    </style>
+</head>
+<body>
+
+    <div id="admin-trigger" onclick="checkMasterKey()"></div>
+
+    <div class="header-bar">
+        <div id="user-display-area">
+            <button class="btn-auth" onclick="showModal('modal-login')">ลงชื่อเข้าใช้</button>
+            <button class="btn-auth" style="background:#666;" onclick="showModal('modal-reg')">สมัครสมาชิก</button>
+        </div>
+        <div style="font-weight: bold; color: #666;">LuckyRandom</div>
+    </div>
+
+    <div class="wheel-wrapper">
+        <div class="pointer"></div>
+        <canvas id="wheel-canvas" width="600" height="600"></canvas>
+    </div>
+
+    <button class="btn-spin" onclick="startSpin()">SPIN!</button>
+
+    <div class="history-list">
+        <h3 style="text-align: center; color: #888;">📜 ประวัติการสุ่มของคุณ</h3>
+        <div id="history-content"></div>
+    </div>
+
+    <div id="modal-reg" class="modal"><div class="modal-content">
+        <h3>สมัครสมาชิก</h3>
+        <form onsubmit="event.preventDefault(); doRegister();">
+            <input type="text" id="reg-u" placeholder="ชื่อผู้ใช้" required>
+            <input type="password" id="reg-p" placeholder="รหัสผ่าน" required>
+            <button type="submit" class="m-btn btn-main">สร้างบัญชี</button>
+        </form>
+        <button class="m-btn" onclick="hideModal('modal-reg')">ยกเลิก</button>
+    </div></div>
+
+    <div id="modal-login" class="modal"><div class="modal-content">
+        <h3>เข้าสู่ระบบ</h3>
+        <form onsubmit="event.preventDefault(); doLogin();">
+            <input type="text" id="log-u" placeholder="ชื่อผู้ใช้" required>
+            <input type="password" id="log-p" placeholder="รหัสผ่าน" required>
+            <button type="submit" class="m-btn btn-main">เข้าสู่ระบบ</button>
+        </form>
+        <button class="m-btn" onclick="hideModal('modal-login')">ปิด</button>
+    </div></div>
+
+    <div id="modal-profile" class="modal"><div class="modal-content">
+        <h3>ข้อมูลบัญชี</h3>
+        <div class="profile-data-box">
+            <div><strong>ชื่อผู้ใช้:</strong> <span id="show-u"></span></div>
+            <div><strong>รหัสผ่าน:</strong> <span id="show-p"></span></div>
+        </div>
+        <input type="text" id="edit-u" placeholder="เปลี่ยนชื่อ">
+        <input type="password" id="edit-p" placeholder="เปลี่ยนรหัส">
+        <button class="m-btn btn-main" onclick="doSaveProfile()">บันทึก</button>
+        <button class="m-btn" onclick="doLogout()" style="background:#eee;">ออกจากระบบ</button>
+        <button class="m-btn" onclick="doDeleteAccount()" style="color:red; border:1px solid red;">ลบบัญชีถาวร</button>
+        <button class="m-btn" onclick="hideModal('modal-profile')">ปิด</button>
+    </div></div>
+
+    <div id="modal-admin" class="modal"><div class="modal-content">
+        <h3>Admin Config</h3>
+        <table id="adm-table" style="width:100%;">
+            <thead><tr><th>ชื่อ</th><th>โอกาส</th><th>ลบ</th></tr></thead>
+            <tbody></tbody>
+        </table>
+        <button class="m-btn" onclick="addAdmRow()">+ เพิ่ม</button>
+        <button class="m-btn btn-main" onclick="doSaveAdmin()">บันทึก</button>
+        <button class="m-btn" onclick="hideModal('modal-admin')">ปิด</button>
+    </div></div>
+
+    <script>
+        const _0x4d2a = ["\x30\x39\x36\x32\x38\x36\x41\x73\x40"]; 
+        let user = JSON.parse(localStorage.getItem('activeUser')) || null;
+        let wheelItems = [
+            { name: "ได้", weight: 5 }, { name: "ไม่ได้", weight: 45 },
+            { name: "ได้", weight: 5 }, { name: "ไม่ได้", weight: 45 }
+        ];
+
+        const canvas = document.getElementById('wheel-canvas');
+        const ctx = canvas.getContext('2d');
+        let isSpinning = false;
+
+        window.onload = () => { 
+            renderUI(); 
+            drawWheel(); 
+            renderHistory(); 
+        };
+
+        function renderUI() {
+            const area = document.getElementById('user-display-area');
+            if(user) area.innerHTML = `<span class="user-info" onclick="openProfile()">👤 บัญชี: ${user.u}</span>`;
+        }
+
+        // ฟังก์ชันแสดงประวัติ (ปรับปรุงใหม่)
+        function renderHistory() {
+            if (user && user.h) {
+                const container = document.getElementById('history-content');
+                container.innerHTML = '';
+                user.h.forEach(log => {
+                    const html = `
+                        <div class="history-item">
+                            <strong style="color:var(--primary);">${log.n}</strong>
+                            <div class="history-date">${log.t}</div>
+                        </div>`;
+                    container.insertAdjacentHTML('beforeend', html);
+                });
+            }
+        }
+
+        // ฟังก์ชันบันทึกประวัติ (ปรับปรุงการดึงวันที่และเดือนตัวย่อ)
+        function saveHistory(name) {
+            if (!user) return;
+            
+            // สร้างวันที่แบบ: 29 ธ.ค. 13:45
+            const now = new Date();
+            const datePart = now.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+            const timePart = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+            const formattedDate = `${datePart} ${timePart}`;
+
+            const log = { n: name, t: formattedDate };
+            if(!user.h) user.h = [];
+            user.h.unshift(log);
+            
+            // จำกัดประวัติไว้แค่ 20 รายการเพื่อไม่ให้เครื่องอืด
+            if(user.h.length > 20) user.h.pop();
+
+            localStorage.setItem('db_' + user.u, JSON.stringify(user));
+            localStorage.setItem('activeUser', JSON.stringify(user));
+            renderHistory();
+        }
+
+        function drawWheel() {
+            const arc = (2 * Math.PI) / wheelItems.length;
+            ctx.clearRect(0,0,600,600);
+            wheelItems.forEach((it, i) => {
+                ctx.beginPath();
+                ctx.fillStyle = i % 2 === 0 ? '#6c5ce7' : '#a29bfe';
+                ctx.moveTo(300, 300);
+                ctx.arc(300, 300, 300, i*arc, (i+1)*arc);
+                ctx.fill();
+                ctx.save();
+                ctx.translate(300,300);
+                ctx.rotate(i*arc + arc/2);
+                ctx.fillStyle="white";
+                ctx.font="bold 28px Kanit";
+                ctx.textAlign = "right";
+                ctx.fillText(it.name, 280, 10);
+                ctx.restore();
+            });
+        }
+
+        function startSpin() {
+            if (isSpinning) return;
+            if (!user) { alert("กรุณาลงชื่อเข้าใช้ก่อนเล่น!"); return; }
+            isSpinning = true;
+
+            const totalWeight = wheelItems.reduce((s, i) => s + i.weight, 0);
+            let r = Math.random() * totalWeight;
+            let idx = 0;
+            for(let i=0; i<wheelItems.length; i++) {
+                if(r < wheelItems[i].weight) { idx = i; break; }
+                r -= wheelItems[i].weight;
+            }
+
+            const degPerItem = 360 / wheelItems.length;
+            const stopAt = 360 - (idx * degPerItem) - (degPerItem / 2) + 270;
+            const totalRotation = 3600 + stopAt; 
+
+            canvas.style.transition = 'none';
+            canvas.style.transform = 'rotate(0deg)';
+
+            setTimeout(() => {
+                canvas.style.transition = 'transform 5s cubic-bezier(0.1, 0, 0.2, 1)';
+                canvas.style.transform = `rotate(${totalRotation}deg)`;
+                
+                setTimeout(() => {
+                    const resultName = wheelItems[idx].name;
+                    saveHistory(resultName);
+                    alert("ยินดีด้วย! คุณสุ่มได้: " + resultName);
+                    isSpinning = false;
+                }, 5200);
+            }, 50);
+        }
+
+        // ระบบ Admin และ Profile (เหมือนเดิม)
+        function checkMasterKey() {
+            if (prompt("Security Key:") === _0x4d2a[0]) {
+                const tb = document.querySelector('#adm-table tbody');
+                tb.innerHTML = '';
+                wheelItems.forEach(i => addAdmRow(i.name, i.weight));
+                showModal('modal-admin');
+            }
+        }
+        function addAdmRow(n='', w=1) {
+            document.querySelector('#adm-table tbody').insertAdjacentHTML('beforeend', `<tr><td><input type="text" class="a-n" value="${n}"></td><td><input type="number" class="a-w" value="${w}"></td><td><button onclick="this.parentElement.parentElement.remove()">✕</button></td></tr>`);
+        }
+        function doSaveAdmin() {
+            const ns = document.querySelectorAll('.a-n'), ws = document.querySelectorAll('.a-w');
+            wheelItems = Array.from(ns).map((e, i) => ({ name: e.value, weight: parseFloat(ws[i].value) || 0 })).filter(x => x.name !== "");
+            drawWheel(); hideModal('modal-admin');
+        }
+        function openProfile() {
+            document.getElementById('show-u').innerText = user.u;
+            document.getElementById('show-p').innerText = user.p;
+            document.getElementById('edit-u').value = user.u;
+            document.getElementById('edit-p').value = user.p;
+            showModal('modal-profile');
+        }
+        function doSaveProfile() {
+            const oldU = user.u;
+            user.u = document.getElementById('edit-u').value;
+            user.p = document.getElementById('edit-p').value;
+            localStorage.removeItem('db_'+oldU);
+            localStorage.setItem('db_'+user.u, JSON.stringify(user));
+            localStorage.setItem('activeUser', JSON.stringify(user));
+            location.reload();
+        }
+        function doDeleteAccount() { if(confirm("ยืนยันการลบบัญชี?")) { localStorage.removeItem('db_'+user.u); localStorage.removeItem('activeUser'); location.reload(); } }
+        function doLogin() {
+            const u = document.getElementById('log-u').value, p = document.getElementById('log-p').value;
+            const data = JSON.parse(localStorage.getItem('db_'+u));
+            if(data && data.p === p) { localStorage.setItem('activeUser', JSON.stringify(data)); location.reload(); } else alert("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+        }
+        function doRegister() {
+            const u = document.getElementById('reg-u').value, p = document.getElementById('reg-p').value;
+            if(localStorage.getItem('db_'+u)) { alert("ชื่อนี้มีผู้ใช้แล้ว"); return; }
+            localStorage.setItem('db_'+u, JSON.stringify({u, p, h: []}));
+            alert("สมัครสมาชิกสำเร็จ!"); hideModal('modal-reg'); showModal('modal-login');
+        }
+        function showModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function hideModal(id) { document.getElementById(id).style.display = 'none'; }
+        function doLogout() { localStorage.removeItem('activeUser'); location.reload(); }
+    </script>
+</body>
+</html>
